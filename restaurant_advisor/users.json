@@ -1,0 +1,14 @@
+{
+  "admin": {
+    "username": "admin",
+    "hashed_password": "$2b$12$ptbByMWr00wwkLLEMaHXeeU6Bz4ZlKBCH0Ovf.ZRxHbxbacFX5QoG",
+    "role": "admin",
+    "full_name": "System Administrator"
+  },
+  "user1": {
+    "username": "user1",
+    "hashed_password": "$2b$12$AFVVLvpGgc1SAy60LZceVeAzDnGBijoSoCob3pdaZ1JrtJTEX5/hy",
+    "role": "restaurant_owner",
+    "full_name": "user"
+  }
+}
