@@ -10,5 +10,11 @@
     "hashed_password": "$2b$12$AFVVLvpGgc1SAy60LZceVeAzDnGBijoSoCob3pdaZ1JrtJTEX5/hy",
     "role": "restaurant_owner",
     "full_name": "user"
+  },
+  "admin1": {
+    "username": "admin1",
+    "hashed_password": "$2b$12$.yJMwQhG1s6ptKJ9rihJTeAduFmdZ0HrqrHMUFjcB16vBm2ue7pqG",
+    "role": "admin",
+    "full_name": "test_admin"
   }
 }

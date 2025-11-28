@@ -69,7 +69,7 @@ def main():
         console.print(trend.page_content[:300] + "...\n")
     
     # Demo 3: Get comprehensive insights for a city
-    city = "Mumbai"
+    city = "Chennai"
     cuisine = "Italian"
     console.print(f"\n[bold]Comprehensive Insights for {cuisine} Restaurant in {city}:[/bold]")
     

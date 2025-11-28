@@ -28,6 +28,9 @@ LANGCHAIN_PROJECT = os.getenv("LANGCHAIN_PROJECT", "restaurant-advisor")
 # JWT Secret for authentication
 JWT_SECRET = os.getenv("JWT_SECRET", "default-secret-key-change-in-production")
 
+# User Agent for web scraping
+USER_AGENT = os.getenv("USER_AGENT", "RestaurantAdvisorBot/1.0")
+
 # Access control roles and permissions
 ROLES = {
     "admin": {

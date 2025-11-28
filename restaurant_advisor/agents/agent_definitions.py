@@ -7,7 +7,13 @@ import google.generativeai as genai
 from langchain_google_genai import ChatGoogleGenerativeAI
 
 from utils.config import GEMINI_API_KEY, MONGODB_URI, MONGODB_DB_NAME
-from agents.pdf_knowledge_agent import PDFKnowledgeAgent
+
+# Import new external agents
+from agents.market_research_agent import MarketResearchAgent
+from agents.consumer_survey_agent import ConsumerSurveyAgent
+from agents.real_estate_agent import RealEstateAgent
+from agents.demographics_agent import DemographicsAgent
+from agents.document_ingestion_agent import DocumentIngestionAgent
 
 # Configure Gemini API
 if GEMINI_API_KEY:
@@ -281,13 +287,9 @@ class PDFResearchAgent(BaseAgent):
     def __init__(self, model_name: str = "gemini-pro-latest"):
         super().__init__(model_name)
         
-        # Initialize the PDF knowledge agent
-        from utils.config import MONGODB_URI, MONGODB_DB_NAME
-        self.pdf_agent = PDFKnowledgeAgent(
-            llm=self.model,
-            mongodb_uri=MONGODB_URI,
-            db_name=MONGODB_DB_NAME
-        )
+        # Initialize the PDF knowledge agent - use lazy import to avoid circular dependency
+        self.pdf_agent = None
+        self._pdf_agent_initialized = False
         
         self.prompt = PromptTemplate(
             template="""You are a specialized research agent for the restaurant industry in India.
@@ -315,9 +317,27 @@ class PDFResearchAgent(BaseAgent):
     
     def run(self, query: str, kg_context: str):
         """Run the PDF research agent."""
+        # Initialize PDF agent lazily on first use to avoid circular imports
+        if not self._pdf_agent_initialized:
+            try:
+                from agents.pdf_knowledge_agent import PDFKnowledgeAgent
+                self.pdf_agent = PDFKnowledgeAgent(
+                    llm=self.model,
+                    mongodb_uri=MONGODB_URI,
+                    db_name=MONGODB_DB_NAME
+                )
+                self._pdf_agent_initialized = True
+            except Exception as e:
+                print(f"Warning: Could not initialize PDFKnowledgeAgent: {str(e)}")
+                self.pdf_agent = None
+                self._pdf_agent_initialized = True
+        
         # First, get insights from the PDF knowledge agent
         try:
-            pdf_insights = self.pdf_agent.run(query)
+            if self.pdf_agent:
+                pdf_insights = self.pdf_agent.run(query)
+            else:
+                pdf_insights = "PDF knowledge agent is not available at this time."
         except Exception as e:
             pdf_insights = f"Could not retrieve PDF insights: {str(e)}"
             
@@ -340,34 +360,25 @@ class RoutingAgent(BaseAgent):
         self.parser = JsonOutputParser()
         
         self.prompt = PromptTemplate(
-            template="""You are a query classifier for a restaurant advisory system. 
-            Your job is to analyze the user's query and determine which specialized agent should handle it.
+            template="""You are a query classifier for a restaurant advisory system in India. 
+            Analyze the user query and determine which specialized agent should handle it.
 
             Available agents:
-            1. location_recommender - For queries about where to locate a restaurant
-            2. regulatory_advisor - For queries about licenses, permits, and regulations
-            3. market_analysis - For queries about market potential, competition, trends
-            4. pdf_research - For queries about research findings, trends, reports, or studies related to restaurants
-            5. basic_query - For general questions that don't fit the above categories
+            - location_recommender: Where to locate restaurants, best areas, location analysis
+            - regulatory_advisor: Licenses, permits, legal compliance, regulations
+            - market_analysis: Market potential, competition, trends, demographics
+            - pdf_research: Research findings, reports, studies about restaurants
+            - basic_query: General questions not fitting above categories
 
             User query: {query}
 
-            Classify this query and extract relevant parameters.
-            Return your response as a JSON object with the following structure:
-            ```json
-            {
-                "agent": "<agent_name>",
-                "parameters": {
-                    "<param1>": "<value1>",
-                    "<param2>": "<value2>"
-                },
-                "reasoning": "<brief explanation of why you selected this agent>"
-            }
-            ```
+            Return ONLY a JSON object (no markdown, no backticks) with this exact structure:
+            {{"agent": "agent_name", "parameters": {{"city": "value", "cuisine": "value"}}, "reasoning": "brief explanation"}}
 
-            For location_recommender queries, try to extract: concept, cuisine, demographic, budget, city
-            For regulatory_advisor queries, try to extract: city, restaurant_type, serves_alcohol, seating_capacity
-            For market_analysis queries, try to extract: concept, cuisine, city, area, demographic
+            Extract parameters based on agent:
+            - location_recommender: concept, cuisine, demographic, budget, city
+            - regulatory_advisor: city, restaurant_type, serves_alcohol, seating_capacity
+            - market_analysis: concept, cuisine, city, area, demographic
             For pdf_research queries, try to extract: research_topic, specific_focus, city (if relevant)
 
             If certain parameters are not mentioned in the query, omit them from the JSON.
@@ -439,7 +450,7 @@ class RoutingAgent(BaseAgent):
             reasoning = "Fallback routing due to parsing error"
             
             # Try to extract city from query
-            city = "Bangalore"  # Default
+            city = "Chennai"  # Default
             for potential_city in ["mumbai", "delhi", "bangalore", "hyderabad", "kolkata", "chennai", "pune", "ahmedabad"]:
                 if potential_city in query_lower:
                     city = potential_city.title()
@@ -460,9 +471,158 @@ class RoutingAgent(BaseAgent):
                 agent = "market_analysis"
                 parameters = {"city": city, "cuisine": "Multi-cuisine"}
                 reasoning = "Query appears to be about market analysis"
+            
+            elif any(word in query_lower for word in ["consumer", "preference", "survey", "dining habit", "behavior"]):
+                agent = "consumer_survey"
+                parameters = {"city": city, "demographic": "all"}
+                reasoning = "Query about consumer preferences and behavior"
+            
+            elif any(word in query_lower for word in ["rent", "real estate", "property", "commercial space", "lease"]):
+                agent = "real_estate"
+                parameters = {"city": city, "locality": "downtown"}
+                reasoning = "Query about real estate and property costs"
+            
+            elif any(word in query_lower for word in ["population", "demographics", "income", "economic", "gdp"]):
+                agent = "demographics"
+                parameters = {"city": city}
+                reasoning = "Query about demographic and economic data"
                 
             return {
                 "agent": agent,
                 "parameters": parameters,
                 "reasoning": reasoning
             }
+
+
+# External Data Agent Wrappers
+
+class ExternalMarketResearchAgent(BaseAgent):
+    """Wrapper for market research agent with web scraping capabilities."""
+    
+    def __init__(self):
+        super().__init__()
+        self.research_agent = MarketResearchAgent()
+    
+    def run(self, query: str, location: str = "Mumbai", **kwargs):
+        """Run market research analysis."""
+        # Refresh market data
+        self.research_agent.refresh_data()
+        
+        # Analyze trends
+        analysis = self.research_agent.analyze_market_trends(location, query)
+        
+        # Get industry statistics
+        stats = self.research_agent.get_industry_statistics()
+        
+        return {
+            "analysis": analysis,
+            "industry_stats": stats,
+            "insights": self.research_agent.search_insights(query, limit=5)
+        }
+
+
+class ExternalConsumerSurveyAgent(BaseAgent):
+    """Wrapper for consumer survey and preferences agent."""
+    
+    def __init__(self):
+        super().__init__()
+        self.survey_agent = ConsumerSurveyAgent()
+    
+    def run(self, query: str, location: str = "Mumbai", demographic: str = "all", **kwargs):
+        """Run consumer preference analysis."""
+        # Analyze preferences
+        preferences = self.survey_agent.analyze_consumer_preferences(location, demographic)
+        
+        # Get dining frequency insights
+        frequency = self.survey_agent.get_dining_frequency_insights(location)
+        
+        # Get delivery insights
+        delivery = self.survey_agent.get_food_delivery_insights(location)
+        
+        # Analyze dietary trends
+        dietary = self.survey_agent.analyze_dietary_trends(location)
+        
+        return {
+            "preferences": preferences,
+            "dining_frequency": frequency,
+            "delivery_trends": delivery,
+            "dietary_trends": dietary
+        }
+
+
+class ExternalRealEstateAgent(BaseAgent):
+    """Wrapper for real estate data agent with live APIs."""
+    
+    def __init__(self):
+        super().__init__()
+        self.realestate_agent = RealEstateAgent()
+    
+    def run(self, query: str, city: str = "Chennai", locality: str = "T Nagar", restaurant_type: str = "casual_dining", **kwargs):
+        """Run real estate analysis."""
+        # Fetch rental costs
+        rental_data = self.realestate_agent.fetch_rental_costs(city, locality)
+        
+        # Get foot traffic
+        foot_traffic = self.realestate_agent.get_foot_traffic_data(locality, city)
+        
+        # Analyze location viability
+        viability = self.realestate_agent.analyze_location_viability(city, locality, restaurant_type)
+        
+        # Get comparable properties
+        comparables = self.realestate_agent.get_comparable_properties(city, locality)
+        
+        return {
+            "rental_data": rental_data,
+            "foot_traffic": foot_traffic,
+            "viability_analysis": viability,
+            "comparable_properties": comparables
+        }
+
+
+class ExternalDemographicsAgent(BaseAgent):
+    """Wrapper for demographics agent with live data integration."""
+    
+    def __init__(self):
+        super().__init__()
+        self.demographics_agent = DemographicsAgent()
+    
+    def run(self, query: str, city: str = "Chennai", restaurant_type: str = "casual_dining", **kwargs):
+        """Run demographic analysis."""
+        # Fetch demographics
+        demographics = self.demographics_agent.fetch_city_demographics(city)
+        
+        # Fetch economic indicators
+        economics = self.demographics_agent.fetch_economic_indicators(city)
+        
+        # Analyze target demographics
+        target_analysis = self.demographics_agent.get_target_demographic_analysis(city, restaurant_type)
+        
+        # Get purchasing power
+        purchasing_power = self.demographics_agent.get_purchasing_power_analysis(city)
+        
+        return {
+            "demographics": demographics,
+            "economic_indicators": economics,
+            "target_analysis": target_analysis,
+            "purchasing_power": purchasing_power
+        }
+
+
+class DocumentIngestionManager(BaseAgent):
+    """Manager for document ingestion from docs folder."""
+    
+    def __init__(self, docs_directory: str = "docs"):
+        super().__init__()
+        self.ingestion_agent = DocumentIngestionAgent(docs_directory)
+    
+    def ingest_all_documents(self, category: str = "general"):
+        """Ingest all documents from docs folder."""
+        return self.ingestion_agent.ingest_directory(category=category)
+    
+    def search_documents(self, query: str, category: Optional[str] = None, limit: int = 5):
+        """Search ingested documents."""
+        return self.ingestion_agent.search_documents(query, category, limit)
+    
+    def get_statistics(self):
+        """Get document statistics."""
+        return self.ingestion_agent.get_document_statistics()

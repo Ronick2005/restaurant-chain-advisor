@@ -14,7 +14,12 @@ from agents.agent_definitions import (
     RegulatoryAdvisorAgent, 
     MarketAnalysisAgent,
     BasicQueryAgent,
-    PDFResearchAgent
+    PDFResearchAgent,
+    ExternalMarketResearchAgent,
+    ExternalConsumerSurveyAgent,
+    ExternalRealEstateAgent,
+    ExternalDemographicsAgent,
+    DocumentIngestionManager
 )
 from agents.domain_agents import DomainSpecialistAgent
 from agents.memory_management import MemoryManager
@@ -51,6 +56,13 @@ class EnhancedAgentOrchestrator:
         self.pdf_research = PDFResearchAgent()
         self.basic_query = BasicQueryAgent()
         self.domain_specialist = DomainSpecialistAgent()
+        
+        # Initialize external data agents
+        self.external_market_research = ExternalMarketResearchAgent()
+        self.external_consumer_survey = ExternalConsumerSurveyAgent()
+        self.external_real_estate = ExternalRealEstateAgent()
+        self.external_demographics = ExternalDemographicsAgent()
+        self.document_manager = DocumentIngestionManager()
     
     def create_agent_graph(self) -> StateGraph:
         """Create the enhanced agent graph with advanced routing."""
@@ -282,9 +294,10 @@ class EnhancedAgentOrchestrator:
                     # Get location demographics
                     locations = []
                     if area:
-                        locations = self.kg.get_location_details(city, area)
+                        # Use get_detailed_location_info which accepts city and area parameters
+                        locations = self.kg.get_detailed_location_info(city, area)
                     else:
-                        locations = self.kg.recommend_locations(city, top_n=3)
+                        locations = self.kg.recommend_locations(city)[:3]
                     
                     # Format cuisine preferences
                     cuisine_insights = []
@@ -466,6 +479,21 @@ class EnhancedAgentOrchestrator:
             state["context"]["kb_context"] = "\n\n".join(kb_context[:5])  # Limit context
             state["context"]["kg_insights"] = "\n\n".join(kg_insights[:8])  # Limit insights
             
+            # Store sources from documents
+            sources = []
+            if kb_docs:
+                for doc in kb_docs:
+                    source_info = {
+                        "file_name": doc.metadata.get("file_name", "Unknown"),
+                        "category": doc.metadata.get("category", "general"),
+                        "page": doc.metadata.get("page_number", 0),
+                        "chunk_id": doc.metadata.get("chunk_id", 0)
+                    }
+                    if source_info not in sources:
+                        sources.append(source_info)
+            
+            state["context"]["sources"] = sources
+            
             # Store context in memory for future reference
             user_id = state["user"]["username"]
             state["memory"][user_id] = state["memory"].get(user_id, {})
@@ -480,6 +508,7 @@ class EnhancedAgentOrchestrator:
             parameters = routing_result.get("parameters", {})
             kb_context = state["context"].get("kb_context", "")
             kg_insights = state["context"].get("kg_insights", "")
+            sources = state["context"].get("sources", [])
             
             # Get user memory context
             user_id = state["user"]["username"]
@@ -494,11 +523,18 @@ class EnhancedAgentOrchestrator:
             
             response = self.location_recommender.run(parameters, kb_context, kg_insights)
             
+            # Append sources to response if available
+            if sources:
+                response += "\n\n--- Sources ---\n"
+                for i, source in enumerate(sources[:5], 1):
+                    response += f"{i}. {source['file_name']} (Category: {source['category']}, Page: {source['page']})\n"
+            
             # Add the response to messages
             state["messages"].append(AIMessage(content=response))
             
             # Store response in memory
             state["memory"][user_id]["last_response"] = response
+            state["memory"][user_id]["last_sources"] = sources
             
             return state
         
@@ -508,6 +544,7 @@ class EnhancedAgentOrchestrator:
             parameters = routing_result.get("parameters", {})
             kb_context = state["context"].get("kb_context", "")
             kg_insights = state["context"].get("kg_insights", "")
+            sources = state["context"].get("sources", [])
             
             # Get user memory context
             user_id = state["user"]["username"]
@@ -515,11 +552,18 @@ class EnhancedAgentOrchestrator:
             
             response = self.regulatory_advisor.run(parameters, kb_context, kg_insights)
             
+            # Append sources to response if available
+            if sources:
+                response += "\n\n--- Sources ---\n"
+                for i, source in enumerate(sources[:5], 1):
+                    response += f"{i}. {source['file_name']} (Category: {source['category']}, Page: {source['page']})\n"
+            
             # Add the response to messages
             state["messages"].append(AIMessage(content=response))
             
             # Store response in memory
             state["memory"][user_id]["last_response"] = response
+            state["memory"][user_id]["last_sources"] = sources
             
             return state
         
@@ -529,12 +573,170 @@ class EnhancedAgentOrchestrator:
             parameters = routing_result.get("parameters", {})
             kb_context = state["context"].get("kb_context", "")
             kg_insights = state["context"].get("kg_insights", "")
+            sources = state["context"].get("sources", [])
             
             # Get user memory context
             user_id = state["user"]["username"]
             user_memory = state["memory"].get(user_id, {})
             
             response = self.market_analysis.run(parameters, kb_context, kg_insights)
+            
+            # Append sources to response if available
+            if sources:
+                response += "\n\n--- Sources ---\n"
+                for i, source in enumerate(sources[:5], 1):
+                    response += f"{i}. {source['file_name']} (Category: {source['category']}, Page: {source['page']})\n"
+            
+            # Add the response to messages
+            state["messages"].append(AIMessage(content=response))
+            
+            # Store response in memory
+            state["memory"][user_id]["last_response"] = response
+            state["memory"][user_id]["last_sources"] = sources
+            
+            return state
+        
+        def run_consumer_survey(state: EnhancedAgentState) -> EnhancedAgentState:
+            """Run the external consumer survey agent."""
+            routing_result = state["context"].get("routing", {})
+            parameters = routing_result.get("parameters", {})
+            query = state["messages"][-1].content if state["messages"] else ""
+            
+            city = parameters.get("city", "Chennai")
+            demographic = parameters.get("demographic", "all")
+            
+            # Get user memory context
+            user_id = state["user"]["username"]
+            user_memory = state["memory"].get(user_id, {})
+            
+            # Run external consumer survey agent
+            result = self.external_consumer_survey.run(query, location=city, demographic=demographic)
+            
+            # Format response
+            response = f"**Consumer Survey Insights for {city}**\n\n"
+            response += f"{result['preferences']['analysis']}\n\n"
+            response += f"**Dining Frequency**: {result['dining_frequency']['weekly_dineout_frequency']}\n\n"
+            response += f"**Delivery Trends**: Delivery adoption at {result['delivery_trends']['delivery_adoption_rate']}%\n\n"
+            response += f"**Dietary Trends**: {result['dietary_trends']['analysis'][:300]}..."
+            
+            # Add the response to messages
+            state["messages"].append(AIMessage(content=response))
+            
+            # Store response in memory
+            state["memory"][user_id]["last_response"] = response
+            state["memory"][user_id]["consumer_data"] = result
+            
+            return state
+        
+        def run_real_estate(state: EnhancedAgentState) -> EnhancedAgentState:
+            """Run the external real estate agent."""
+            routing_result = state["context"].get("routing", {})
+            parameters = routing_result.get("parameters", {})
+            query = state["messages"][-1].content if state["messages"] else ""
+            
+            city = parameters.get("city", "Chennai")
+            locality = parameters.get("locality", "downtown")
+            restaurant_type = parameters.get("restaurant_type", "casual_dining")
+            
+            # Get user memory context
+            user_id = state["user"]["username"]
+            user_memory = state["memory"].get(user_id, {})
+            
+            # Run external real estate agent
+            result = self.external_real_estate.run(query, city=city, locality=locality, restaurant_type=restaurant_type)
+            
+            # Format response
+            response = f"**Real Estate Analysis for {locality}, {city}**\n\n"
+            response += f"**Rental Costs**: ₹{result['rental_data']['rental_cost_per_sqft_monthly']['average']}/sqft/month\n"
+            response += f"Range: ₹{result['rental_data']['rental_cost_per_sqft_monthly']['min']} - ₹{result['rental_data']['rental_cost_per_sqft_monthly']['max']}\n\n"
+            response += f"**Foot Traffic**: {result['foot_traffic']['foot_traffic_level']}\n\n"
+            response += f"**Viability Analysis**:\n{result['viability_analysis']['analysis']}"
+            
+            # Add the response to messages
+            state["messages"].append(AIMessage(content=response))
+            
+            # Store response in memory
+            state["memory"][user_id]["last_response"] = response
+            state["memory"][user_id]["real_estate_data"] = result
+            
+            return state
+        
+        def run_demographics(state: EnhancedAgentState) -> EnhancedAgentState:
+            """Run the external demographics agent."""
+            routing_result = state["context"].get("routing", {})
+            parameters = routing_result.get("parameters", {})
+            query = state["messages"][-1].content if state["messages"] else ""
+            
+            city = parameters.get("city", "Chennai")
+            restaurant_type = parameters.get("restaurant_type", "casual_dining")
+            
+            # Get user memory context
+            user_id = state["user"]["username"]
+            user_memory = state["memory"].get(user_id, {})
+            
+            # Run external demographics agent
+            result = self.external_demographics.run(query, city=city, restaurant_type=restaurant_type)
+            
+            # Format response
+            response = f"**Demographic & Economic Analysis for {city}**\n\n"
+            response += f"**Population**: {result['demographics']['population']:,}\n"
+            response += f"**Median Age**: {result['demographics']['median_age']} years\n"
+            response += f"**GDP Per Capita**: ${result['economic_indicators']['gdp_per_capita_usd']:,}\n"
+            response += f"**Avg Monthly Income**: ₹{result['economic_indicators']['avg_monthly_income_inr']:,}\n\n"
+            response += f"**Purchasing Power**: Monthly dining budget ~ ₹{result['purchasing_power']['estimated_monthly_dining_budget']}\n\n"
+            response += f"**Target Demographics Analysis**:\n{result['target_analysis']['analysis']}"
+            
+            # Add the response to messages
+            state["messages"].append(AIMessage(content=response))
+            
+            # Store response in memory
+            state["memory"][user_id]["last_response"] = response
+            state["memory"][user_id]["demographics_data"] = result
+            
+            return state
+        
+        def run_market_research(state: EnhancedAgentState) -> EnhancedAgentState:
+            """Run the external market research agent."""
+            routing_result = state["context"].get("routing", {})
+            parameters = routing_result.get("parameters", {})
+            query = state["messages"][-1].content if state["messages"] else ""
+            
+            city = parameters.get("city", "Chennai")
+            
+            # Get user memory context
+            user_id = state["user"]["username"]
+            user_memory = state["memory"].get(user_id, {})
+            
+            # Run external market research agent
+            result = self.external_market_research.run(query, location=city)
+            
+            # Format response
+            response = f"**Market Research Insights for {city}**\n\n"
+            response += f"**Industry Statistics**:\n"
+            response += f"- Market Size: ${result['industry_stats']['market_size_usd_billion']}B\n"
+            response += f"- Growth Rate: {result['industry_stats']['projected_growth_rate_percent']}%\n\n"
+            response += f"**Market Analysis**:\n{result['analysis']['analysis']}"
+            
+            # Add the response to messages
+            state["messages"].append(AIMessage(content=response))
+            
+            # Store response in memory
+            state["memory"][user_id]["last_response"] = response
+            state["memory"][user_id]["market_research_data"] = result
+            
+            return state
+        
+        def run_pdf_research(state: EnhancedAgentState) -> EnhancedAgentState:
+            """Run the PDF research agent."""
+            routing_result = state["context"].get("routing", {})
+            parameters = routing_result.get("parameters", {})
+            query = state["messages"][-1].content if state["messages"] else ""
+            
+            # Get user memory context
+            user_id = state["user"]["username"]
+            user_memory = state["memory"].get(user_id, {})
+            
+            response = self.pdf_research.run(query, parameters)
             
             # Format the response for better readability
             formatted_response = f"""# Market Analysis Results
@@ -670,6 +872,10 @@ For more detailed information, please contact your administrator to upgrade your
         workflow.add_node("location_recommender", run_location_recommender)
         workflow.add_node("regulatory_advisor", run_regulatory_advisor)
         workflow.add_node("market_analysis", run_market_analysis)
+        workflow.add_node("consumer_survey", run_consumer_survey)
+        workflow.add_node("real_estate", run_real_estate)
+        workflow.add_node("demographics", run_demographics)
+        workflow.add_node("market_research", run_market_research)
         workflow.add_node("pdf_research", run_pdf_research)
         workflow.add_node("domain_specialist", run_domain_specialist)
         workflow.add_node("basic_query", run_basic_query)
@@ -690,6 +896,10 @@ For more detailed information, please contact your administrator to upgrade your
                 "location_recommender": "location_recommender",
                 "regulatory_advisor": "regulatory_advisor",
                 "market_analysis": "market_analysis",
+                "consumer_survey": "consumer_survey",
+                "real_estate": "real_estate",
+                "demographics": "demographics",
+                "market_research": "market_research",
                 "pdf_research": "pdf_research",
                 "domain_specialist": "domain_specialist",
                 "basic_query": "basic_query"
@@ -699,6 +909,10 @@ For more detailed information, please contact your administrator to upgrade your
         workflow.add_edge("location_recommender", END)
         workflow.add_edge("regulatory_advisor", END)
         workflow.add_edge("market_analysis", END)
+        workflow.add_edge("consumer_survey", END)
+        workflow.add_edge("real_estate", END)
+        workflow.add_edge("demographics", END)
+        workflow.add_edge("market_research", END)
         workflow.add_edge("pdf_research", END)
         workflow.add_edge("domain_specialist", END)
         workflow.add_edge("basic_query", END)
