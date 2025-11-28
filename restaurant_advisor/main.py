@@ -14,8 +14,6 @@ from agents.orchestrator import AgentOrchestrator
 from agents.enhanced_orchestrator import EnhancedAgentOrchestrator
 from utils.auth import authenticate_user, create_user, get_users
 from utils.config import ROLES
-from langchain_google_genai import ChatGoogleGenerativeAI
-from utils.config import GEMINI_API_KEY
 
 # Initialize rich console
 console = Console()

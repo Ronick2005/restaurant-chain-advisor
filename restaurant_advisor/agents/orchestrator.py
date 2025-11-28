@@ -227,9 +227,10 @@ def create_agent_graph(kb: MongoKnowledgeBase, kg: Neo4jKnowledgeGraph):
                 # Get location demographics
                 locations = []
                 if area:
-                    locations = kg.get_location_details(city, area)
+                    # Use get_detailed_location_info which accepts city and area parameters
+                    locations = kg.get_detailed_location_info(city, area)
                 else:
-                    locations = kg.recommend_locations(city, top_n=3)
+                    locations = kg.recommend_locations(city)[:3]
                 
                 # Format cuisine preferences
                 cuisine_insights = []

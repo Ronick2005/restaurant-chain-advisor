@@ -224,9 +224,18 @@ class MongoKnowledgeBase:
         # Convert to Documents
         documents = []
         for result in results:
+            # Build metadata from individual fields
+            metadata = {
+                "file_name": result.get("file_name", ""),
+                "file_path": result.get("file_path", ""),
+                "category": result.get("category", "general"),
+                "chunk_id": result.get("chunk_id", 0),
+                "page_number": result.get("page_number", 0)
+            }
+            
             doc = Document(
-                page_content=result["content"],
-                metadata=result["metadata"]
+                page_content=result.get("content", ""),
+                metadata=metadata
             )
             documents.append(doc)
             
@@ -251,16 +260,23 @@ class MongoKnowledgeBase:
     def search_by_topic(self, topic: str, k: int = 5) -> List[Document]:
         """Search documents by a specific topic in metadata."""
         results = self.collection.find(
-            {"metadata.topics": {"$regex": f".*{topic}.*", "$options": "i"}}
+            {"category": {"$regex": f".*{topic}.*", "$options": "i"}}
         ).limit(k)
         
-        return [Document(page_content=r["content"], metadata=r["metadata"]) for r in results]
+        documents = []
+        for r in results:
+            metadata = {
+                "file_name": r.get("file_name", ""),
+                "category": r.get("category", "general"),
+                "chunk_id": r.get("chunk_id", 0)
+            }
+            documents.append(Document(page_content=r["content"], metadata=metadata))
+        return documents
     
     def get_document_topics(self) -> Dict[str, int]:
         """Extract all topics from document metadata and return frequency count."""
         pipeline = [
-            {"$unwind": "$metadata.topics"},
-            {"$group": {"_id": "$metadata.topics", "count": {"$sum": 1}}},
+            {"$group": {"_id": "$category", "count": {"$sum": 1}}},
             {"$sort": {"count": -1}}
         ]
         
@@ -270,10 +286,7 @@ class MongoKnowledgeBase:
     def get_city_specific_insights(self, city: str, query: str = None, k: int = 5) -> List[Document]:
         """Get city-specific insights from the knowledge base."""
         filter_dict = {
-            "$or": [
-                {"metadata.city": {"$regex": f".*{city}.*", "$options": "i"}},
-                {"content": {"$regex": f".*{city}.*", "$options": "i"}}
-            ]
+            "content": {"$regex": f".*{city}.*", "$options": "i"}
         }
         
         if query:
@@ -282,7 +295,15 @@ class MongoKnowledgeBase:
         else:
             # Otherwise, just get documents mentioning the city
             results = self.collection.find(filter_dict).limit(k)
-            return [Document(page_content=r["content"], metadata=r["metadata"]) for r in results]
+            documents = []
+            for r in results:
+                metadata = {
+                    "file_name": r.get("file_name", ""),
+                    "category": r.get("category", "general"),
+                    "chunk_id": r.get("chunk_id", 0)
+                }
+                documents.append(Document(page_content=r["content"], metadata=metadata))
+            return documents
             
     def get_recent_market_trends(self, year_threshold: int = 2023) -> List[Document]:
         """Get the most recent market trends from documents published after the threshold year."""
