@@ -37,7 +37,7 @@ def main():
     # Initialize language model
     console.print("[yellow]Initializing language model...[/yellow]")
     try:
-        llm = ChatGoogleGenerativeAI(model="gemini-pro-latest", google_api_key=GEMINI_API_KEY)
+        llm = ChatGoogleGenerativeAI(model="gemini-flash-latest", google_api_key=GEMINI_API_KEY)
         console.print("[green]Language model initialized![/green]")
     except Exception as e:
         console.print(f"[red]Error initializing language model: {str(e)}[/red]")

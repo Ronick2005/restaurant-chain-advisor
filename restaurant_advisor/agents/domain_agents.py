@@ -6,7 +6,7 @@ These agents provide domain expertise for specific use cases and queries.
 from typing import Dict, List, Any, Optional, Tuple, Literal
 from langchain_core.prompts import PromptTemplate
 from langchain_core.output_parsers import StrOutputParser, JsonOutputParser
-from agents.agent_definitions import BaseAgent
+from agents.agent_definitions import BaseAgent, extract_text_from_response
 
 class DomainSpecialist:
     """Base class for domain specialists."""
@@ -350,7 +350,7 @@ class DesignInteriorSpecialist(DomainSpecialist):
 class DomainSpecialistAgent(BaseAgent):
     """Agent that specializes in domain-specific restaurant advisory."""
     
-    def __init__(self, model_name: str = "gemini-pro-latest"):
+    def __init__(self, model_name: str = None):
         super().__init__(model_name)
         
         # Initialize all domain specialists
@@ -419,7 +419,8 @@ class DomainSpecialistAgent(BaseAgent):
             
             # Get the response from the model
             model_response = self.model.invoke(prompt_value)
-            parsed_response = self.parser.invoke(model_response)
+            content = extract_text_from_response(model_response)
+            parsed_response = self.parser.invoke(content)
             
             return response_prefix + parsed_response
         else:
@@ -432,4 +433,5 @@ class DomainSpecialistAgent(BaseAgent):
             
             # Get the response from the model
             model_response = self.model.invoke(prompt_value)
-            return self.parser.invoke(model_response)
+            content = extract_text_from_response(model_response)
+            return self.parser.invoke(content)

@@ -25,7 +25,7 @@ class DemographicsAgent:
     
     def __init__(self):
         self.llm = ChatGoogleGenerativeAI(
-            model="gemini-1.5-flash",
+            model="gemini-flash-latest",
             google_api_key=GEMINI_API_KEY,
             temperature=0.3
         )

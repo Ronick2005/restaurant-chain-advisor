@@ -6,7 +6,7 @@ from langchain_core.output_parsers import StrOutputParser, JsonOutputParser
 import google.generativeai as genai
 from langchain_google_genai import ChatGoogleGenerativeAI
 
-from utils.config import GEMINI_API_KEY, MONGODB_URI, MONGODB_DB_NAME
+from utils.config import GEMINI_API_KEY, GEMINI_MODEL, MONGODB_URI, MONGODB_DB_NAME
 
 # Import new external agents
 from agents.market_research_agent import MarketResearchAgent
@@ -19,10 +19,41 @@ from agents.document_ingestion_agent import DocumentIngestionAgent
 if GEMINI_API_KEY:
     genai.configure(api_key=GEMINI_API_KEY)
 else:
-    print("Warning: GEMINI_API_KEY not found in environment. Using gemini-pro may fail.")
+    print("Warning: GEMINI_API_KEY not found in environment. Using gemini-flash-latest may fail.")
 
-def get_gemini_model(model_name: str = "gemini-pro-latest"):
-    """Initialize a Gemini model for agent use."""
+def extract_text_from_response(response) -> str:
+    """Extract text content from various Gemini response formats."""
+    # Handle AIMessage or similar objects with content attribute
+    if hasattr(response, "content"):
+        content = response.content
+    else:
+        content = response
+    
+    # Handle list format (new gemini-flash-latest format)
+    if isinstance(content, list):
+        # Extract text from list of dicts like [{'type': 'text', 'text': '...'}]
+        text_parts = []
+        for item in content:
+            if isinstance(item, dict) and 'text' in item:
+                text_parts.append(item['text'])
+            elif isinstance(item, str):
+                text_parts.append(item)
+            else:
+                text_parts.append(str(item))
+        return " ".join(text_parts)
+    
+    # Handle string content
+    return str(content)
+
+def get_gemini_model(model_name: str = None):
+    """Initialize a Gemini model for agent use.
+    
+    Args:
+        model_name: Optional model name. If not provided, uses GEMINI_MODEL from config.
+    """
+    if model_name is None:
+        model_name = GEMINI_MODEL
+    
     # Check if API key is available
     if not GEMINI_API_KEY:
         raise ValueError("GEMINI_API_KEY not found in environment variables. Please set it in your .env file.")
@@ -38,7 +69,7 @@ def get_gemini_model(model_name: str = "gemini-pro-latest"):
 class BaseAgent:
     """Base class for all agents in the system."""
     
-    def __init__(self, model_name: str = "gemini-pro-latest"):
+    def __init__(self, model_name: str = None):
         self.model = get_gemini_model(model_name)
         self.parser = StrOutputParser()
     
@@ -49,7 +80,7 @@ class BaseAgent:
 class LocationRecommenderAgent(BaseAgent):
     """Agent for recommending restaurant locations based on user preferences."""
     
-    def __init__(self, model_name: str = "gemini-pro-latest"):
+    def __init__(self, model_name: str = None):
         super().__init__(model_name)
         
         self.prompt = PromptTemplate(
@@ -96,12 +127,13 @@ class LocationRecommenderAgent(BaseAgent):
         )
         
         response = self.model.invoke(prompt_value)
-        return self.parser.invoke(response)
+        content = extract_text_from_response(response)
+        return self.parser.invoke(content)
 
 class RegulatoryAdvisorAgent(BaseAgent):
     """Agent for providing regulatory advice for restaurant setup."""
     
-    def __init__(self, model_name: str = "gemini-pro-latest"):
+    def __init__(self, model_name: str = None):
         super().__init__(model_name)
         
         self.prompt = PromptTemplate(
@@ -143,12 +175,26 @@ class RegulatoryAdvisorAgent(BaseAgent):
         )
         
         response = self.model.invoke(prompt_value)
-        return self.parser.invoke(response)
+        
+        try:
+            # Extract the content from the response using helper function
+            content = extract_text_from_response(response)
+            
+            # Clean markdown code blocks
+            import re
+            content = re.sub(r'^```json\s*', '', content, flags=re.MULTILINE)
+            content = re.sub(r'^```\s*$', '', content, flags=re.MULTILINE)
+            content = content.strip()
+            
+            return self.parser.invoke(content)
+        except Exception as e:
+            print(f"Error parsing regulatory response: {str(e)}")
+            return f"Regulatory information for {query.get('city', 'your city')} based on available data. (Parsing error: {str(e)})"
 
 class MarketAnalysisAgent(BaseAgent):
     """Agent for analyzing market potential and competition for restaurant concepts."""
     
-    def __init__(self, model_name: str = "gemini-pro-latest"):
+    def __init__(self, model_name: str = None):
         super().__init__(model_name)
         self.parser = JsonOutputParser()
         
@@ -168,32 +214,32 @@ class MarketAnalysisAgent(BaseAgent):
             Knowledge graph insights:
             {kg_insights}
 
-            Please provide a JSON response with the following structure:
-            ```json
-            {
-                "market_potential": {
-                    "score": <0-10 score>,
-                    "reasoning": "<detailed explanation>"
-                },
-                "competition_analysis": {
-                    "saturation_level": "<low/medium/high>",
-                    "major_competitors": ["<competitor 1>", "<competitor 2>"],
-                    "differentiation_opportunities": ["<opportunity 1>", "<opportunity 2>"]
-                },
-                "consumer_trends": {
-                    "relevant_trends": ["<trend 1>", "<trend 2>"],
-                    "recommendations": ["<recommendation 1>", "<recommendation 2>"]
-                },
-                "pricing_strategy": {
-                    "recommended_price_point": "<budget/mid-range/premium>",
-                    "reasoning": "<explanation>"
-                },
+            IMPORTANT: Respond with ONLY valid JSON - no markdown, no code blocks, no extra text.
+            
+            Required JSON structure:
+            {{
+                "market_potential": {{
+                    "score": 7,
+                    "reasoning": "detailed explanation"
+                }},
+                "competition_analysis": {{
+                    "saturation_level": "medium",
+                    "major_competitors": ["competitor 1", "competitor 2"],
+                    "differentiation_opportunities": ["opportunity 1", "opportunity 2"]
+                }},
+                "consumer_trends": {{
+                    "relevant_trends": ["trend 1", "trend 2"],
+                    "recommendations": ["recommendation 1", "recommendation 2"]
+                }},
+                "pricing_strategy": {{
+                    "recommended_price_point": "mid-range",
+                    "reasoning": "explanation"
+                }},
                 "risk_factors": [
-                    {"factor": "<risk factor 1>", "mitigation": "<mitigation strategy>"},
-                    {"factor": "<risk factor 2>", "mitigation": "<mitigation strategy>"}
+                    {{"factor": "risk factor 1", "mitigation": "mitigation strategy"}},
+                    {{"factor": "risk factor 2", "mitigation": "mitigation strategy"}}
                 ]
-            }
-            ```
+            }}
             
             Ensure your analysis is data-driven and specific to the Indian market context.
             """,
@@ -216,13 +262,29 @@ class MarketAnalysisAgent(BaseAgent):
         
         # Handle different response types based on model
         try:
-            # Extract the content from the response
-            content = response.content if hasattr(response, "content") else response
+            # Extract the content from the response using helper function
+            content = extract_text_from_response(response)
             
-            # Parse the JSON response
-            return self.parser.invoke(content)
+            # Clean markdown code blocks and extra formatting
+            import re
+            import json
+            
+            # Remove markdown code blocks
+            content = re.sub(r'```json\s*', '', content, flags=re.MULTILINE | re.IGNORECASE)
+            content = re.sub(r'```\s*', '', content, flags=re.MULTILINE)
+            content = content.strip()
+            
+            # Try direct JSON parsing first (more robust than parser)
+            try:
+                result = json.loads(content)
+                return result
+            except json.JSONDecodeError:
+                # Fallback to parser if direct parsing fails
+                return self.parser.invoke(content)
+                
         except Exception as e:
             print(f"Error parsing market analysis response: {str(e)}")
+            print(f"Response content: {content[:200] if 'content' in locals() else 'N/A'}...")
             
             # Provide a fallback response that indicates we're using the real model
             # but had trouble parsing the response
@@ -252,7 +314,7 @@ class MarketAnalysisAgent(BaseAgent):
 class BasicQueryAgent(BaseAgent):
     """Agent for handling basic queries with limited access."""
     
-    def __init__(self, model_name: str = "gemini-pro-latest"):
+    def __init__(self, model_name: str = None):
         super().__init__(model_name)
         
         self.prompt = PromptTemplate(
@@ -279,12 +341,13 @@ class BasicQueryAgent(BaseAgent):
         )
         
         response = self.model.invoke(prompt_value)
-        return self.parser.invoke(response)
+        content = extract_text_from_response(response)
+        return self.parser.invoke(content)
 
 class PDFResearchAgent(BaseAgent):
     """Agent for answering queries based on PDF research documents."""
     
-    def __init__(self, model_name: str = "gemini-pro-latest"):
+    def __init__(self, model_name: str = None):
         super().__init__(model_name)
         
         # Initialize the PDF knowledge agent - use lazy import to avoid circular dependency
@@ -350,12 +413,13 @@ class PDFResearchAgent(BaseAgent):
         
         # Generate the response
         response = self.model.invoke(prompt_value)
-        return self.parser.invoke(response)
+        content = extract_text_from_response(response)
+        return self.parser.invoke(content)
 
 class RoutingAgent(BaseAgent):
     """Agent for routing queries to specialized agents."""
     
-    def __init__(self, model_name: str = "gemini-pro-latest"):
+    def __init__(self, model_name: str = None):
         super().__init__(model_name)
         self.parser = JsonOutputParser()
         
@@ -393,8 +457,8 @@ class RoutingAgent(BaseAgent):
             prompt_value = self.prompt.format(query=query)
             response = self.model.invoke(prompt_value)
             
-            # Extract content depending on response format
-            content = response.content if hasattr(response, "content") else response
+            # Extract content using helper function
+            content = extract_text_from_response(response)
             
             # Add extra handling for JSON parsing
             try:

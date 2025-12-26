@@ -18,6 +18,7 @@ NEO4J_PASSWORD = os.getenv("NEO4J_PASSWORD")
 
 # Gemini API configuration
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
+GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-flash-latest")  # Default model for all agents
 
 # LangSmith configuration
 LANGCHAIN_TRACING_V2 = os.getenv("LANGCHAIN_TRACING_V2", "false").lower() == "true"

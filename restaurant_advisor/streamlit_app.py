@@ -51,7 +51,7 @@ st.markdown("""
         margin-top: 1rem;
     }
     .response-box {
-        background-color: #ffffff;
+        background-color: transparent;
         padding: 1.5rem;
         border-radius: 5px;
         border: 1px solid #e0e0e0;

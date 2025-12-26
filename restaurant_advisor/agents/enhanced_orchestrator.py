@@ -581,17 +581,49 @@ class EnhancedAgentOrchestrator:
             
             response = self.market_analysis.run(parameters, kb_context, kg_insights)
             
+            # Format response if it's a dict (JSON structure)
+            if isinstance(response, dict):
+                formatted_response = f"""# Market Analysis for {parameters.get('cuisine', 'Restaurant')} in {parameters.get('city', 'City')}
+
+## Market Potential
+Score: {response.get('market_potential', {}).get('score', 'N/A')}/10
+{response.get('market_potential', {}).get('reasoning', 'No analysis available')}
+
+## Competition Analysis
+Saturation Level: {response.get('competition_analysis', {}).get('saturation_level', 'N/A')}
+Major Competitors: {', '.join(response.get('competition_analysis', {}).get('major_competitors', ['None identified']))}
+
+Differentiation Opportunities:
+{chr(10).join('- ' + item for item in response.get('competition_analysis', {}).get('differentiation_opportunities', ['None identified']))}
+
+## Consumer Trends
+Relevant Trends:
+{chr(10).join('- ' + item for item in response.get('consumer_trends', {}).get('relevant_trends', ['No trends identified']))}
+
+Recommendations:
+{chr(10).join('- ' + item for item in response.get('consumer_trends', {}).get('recommendations', ['No recommendations available']))}
+
+## Pricing Strategy
+Recommended Price Point: {response.get('pricing_strategy', {}).get('recommended_price_point', 'N/A')}
+{response.get('pricing_strategy', {}).get('reasoning', 'No reasoning provided')}
+
+## Risk Factors
+{chr(10).join('- ' + item.get('factor', '') + ': ' + item.get('mitigation', '') for item in response.get('risk_factors', [{'factor': 'No risk factors identified', 'mitigation': ''}]))}
+"""
+            else:
+                formatted_response = str(response)
+            
             # Append sources to response if available
             if sources:
-                response += "\n\n--- Sources ---\n"
+                formatted_response += "\n\n--- Sources ---\n"
                 for i, source in enumerate(sources[:5], 1):
-                    response += f"{i}. {source['file_name']} (Category: {source['category']}, Page: {source['page']})\n"
+                    formatted_response += f"{i}. {source['file_name']} (Category: {source['category']}, Page: {source['page']})\n"
             
             # Add the response to messages
-            state["messages"].append(AIMessage(content=response))
+            state["messages"].append(AIMessage(content=formatted_response))
             
             # Store response in memory
-            state["memory"][user_id]["last_response"] = response
+            state["memory"][user_id]["last_response"] = formatted_response
             state["memory"][user_id]["last_sources"] = sources
             
             return state
@@ -965,8 +997,35 @@ For more detailed information, please contact your administrator to upgrade your
             if result["messages"] and isinstance(result["messages"][-1], AIMessage):
                 self.memory_manager.process_message(user_id, result["messages"][-1])
             
-            # Return the latest response
-            return result["messages"][-1].content
+            # Build source/provenance banner
+            context = result.get("context", {}) if isinstance(result, dict) else {}
+            kb_used = bool(context.get("kb_context"))
+            kg_used = bool(context.get("kg_insights"))
+            routing = context.get("routing", {})
+            agent_name = routing.get("agent", "unknown")
+            sources = context.get("sources", []) or []
+            source_lines = []
+            for src in sources[:3]:
+                file_name = src.get("file_name", "Unknown")
+                page = src.get("page", src.get("page_number", "-"))
+                category = src.get("category", "general")
+                source_lines.append(f"  • {file_name} (page {page}, {category})")
+            source_list = "\n".join(source_lines) if source_lines else "  • None captured"
+            provenance = (
+                "\n\n---\n"
+                "**Source Trace**\n"
+                f"- MongoDB KB: {'✅' if kb_used else '❌'}\n"
+                f"- Neo4j KG: {'✅' if kg_used else '❌'}\n"
+                f"- Agent: {agent_name}\n"
+                f"- Documents:\n{source_list}"
+            )
+            
+            latest = result["messages"][-1].content if result.get("messages") else ""
+            if isinstance(latest, str):
+                latest_with_sources = latest + provenance
+            else:
+                latest_with_sources = str(latest) + provenance
+            return latest_with_sources
             
         except Exception as e:
             print(f"Error in enhanced orchestrator.run: {type(e).__name__}: {str(e)}")

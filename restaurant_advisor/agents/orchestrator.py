@@ -570,8 +570,35 @@ class AgentOrchestrator:
             # Update user memory with the new conversation
             self.memory[user["username"]] = result["messages"]
             
-            # Return the latest response
-            return result["messages"][-1].content
+            # Build source/provenance banner
+            context = result.get("context", {}) if isinstance(result, dict) else {}
+            kb_used = bool(context.get("kb_context"))
+            kg_used = bool(context.get("kg_insights"))
+            routing = context.get("routing", {})
+            agent_name = routing.get("agent", "unknown")
+            sources = context.get("sources", []) or []
+            source_lines = []
+            for src in sources[:3]:
+                file_name = src.get("file_name", "Unknown")
+                page = src.get("page", src.get("page_number", "-"))
+                category = src.get("category", "general")
+                source_lines.append(f"  • {file_name} (page {page}, {category})")
+            source_list = "\n".join(source_lines) if source_lines else "  • None captured"
+            provenance = (
+                "\n\n---\n"
+                "**Source Trace**\n"
+                f"- MongoDB KB: {'✅' if kb_used else '❌'}\n"
+                f"- Neo4j KG: {'✅' if kg_used else '❌'}\n"
+                f"- Agent: {agent_name}\n"
+                f"- Documents:\n{source_list}"
+            )
+            
+            latest = result["messages"][-1].content if result.get("messages") else ""
+            if isinstance(latest, str):
+                latest_with_sources = latest + provenance
+            else:
+                latest_with_sources = str(latest) + provenance
+            return latest_with_sources
         except Exception as e:
             print(f"Error in orchestrator.run: {type(e).__name__}: {str(e)}")
             import traceback
