@@ -138,6 +138,11 @@ class EnhancedAgentOrchestrator:
             # Initialize context containers
             kb_context = []
             kg_insights = []
+            kb_docs = []  # Store retrieved documents for source tracking
+            
+            # Track whether KB/KG were queried (not just if they returned results)
+            kb_queried = False
+            kg_queried = False
             
             # Check user's KB and KG access permissions
             user = state["user"]
@@ -153,6 +158,7 @@ class EnhancedAgentOrchestrator:
                 
                 # Get relevant documents from knowledge base if permission granted
                 if has_kb_access and city:
+                    kb_queried = True
                     # Create a more specific query using all available parameters
                     query_parts = [f"restaurant locations in {city}"]
                     if cuisine:
@@ -165,14 +171,16 @@ class EnhancedAgentOrchestrator:
                     query = " ".join(query_parts) + " commercial real estate market insights foot traffic"
                     
                     # Perform a hybrid search for more relevant results
-                    kb_docs = self.kb.hybrid_search(
+                    docs = self.kb.hybrid_search(
                         query, 
                         user_filter={"metadata.type": {"$in": ["real_estate", "demographics", "food_consumption"]}}
                     )
-                    kb_context = [doc.page_content for doc in kb_docs]
+                    kb_docs.extend(docs)
+                    kb_context = [doc.page_content for doc in docs]
                 
                 # Get insights from knowledge graph if permission granted
                 if has_kg_access and city and self.kg:
+                    kg_queried = True
                     # Get detailed location recommendations
                     locations = self.kg.recommend_locations(city, cuisine_type=cuisine)
                     
@@ -215,6 +223,7 @@ class EnhancedAgentOrchestrator:
                 
                 # Get relevant documents from knowledge base if permission granted
                 if has_kb_access and city:
+                    kb_queried = True
                     # Create a more specific query
                     query_parts = [f"restaurant regulations in {city}"]
                     if restaurant_type:
@@ -224,14 +233,16 @@ class EnhancedAgentOrchestrator:
                     
                     query = " ".join(query_parts) + " licensing permits requirements"
                     
-                    kb_docs = self.kb.hybrid_search(
+                    docs = self.kb.hybrid_search(
                         query, 
                         user_filter={"metadata.type": {"$in": ["regulation", "food_consumption"]}}
                     )
-                    kb_context = [doc.page_content for doc in kb_docs]
+                    kb_docs.extend(docs)
+                    kb_context = [doc.page_content for doc in docs]
                 
                 # Get insights from knowledge graph if permission granted
                 if has_kg_access and city and self.kg:
+                    kg_queried = True
                     regulations = self.kg.get_regulatory_info(city)
                     
                     for reg in regulations:
@@ -269,6 +280,7 @@ class EnhancedAgentOrchestrator:
                 
                 # Get relevant documents from knowledge base if permission granted
                 if has_kb_access and city:
+                    kb_queried = True
                     # Create a more specific query
                     query_parts = [f"restaurant market analysis in {city}"]
                     if cuisine:
@@ -280,14 +292,16 @@ class EnhancedAgentOrchestrator:
                     
                     query = " ".join(query_parts) + " consumer trends competition demographics food preferences"
                     
-                    kb_docs = self.kb.hybrid_search(
+                    docs = self.kb.hybrid_search(
                         query, 
                         user_filter={"metadata.type": {"$in": ["food_consumption", "demographics", "real_estate"]}}
                     )
-                    kb_context = [doc.page_content for doc in kb_docs]
+                    kb_docs.extend(docs)
+                    kb_context = [doc.page_content for doc in docs]
                     
                 # Get insights from knowledge graph if permission granted
                 if has_kg_access and city and self.kg:
+                    kg_queried = True
                     # Get cuisine preferences for the city
                     cuisine_preferences = self.kg.get_cuisine_preferences(city)
                     
@@ -345,6 +359,7 @@ class EnhancedAgentOrchestrator:
                 city = parameters.get("city", "")
                 
                 if has_kb_access:
+                    kb_queried = True
                     # Build a query that will retrieve relevant document content
                     query_parts = ["restaurant business research"]
                     if research_topic:
@@ -357,14 +372,16 @@ class EnhancedAgentOrchestrator:
                     query = " ".join(query_parts) + " studies reports findings data statistics"
                     
                     # Perform knowledge base search with emphasis on research documents
-                    kb_docs = self.kb.hybrid_search(
+                    docs = self.kb.hybrid_search(
                         query,
                         user_filter={"metadata.type": {"$in": ["research", "food_consumption", "demographics", "real_estate"]}},
                         k=8  # Get more documents for research queries
                     )
-                    kb_context = [doc.page_content for doc in kb_docs]
+                    kb_docs.extend(docs)
+                    kb_context = [doc.page_content for doc in docs]
                 
                 if has_kg_access and city and self.kg:
+                    kg_queried = True
                     # Get city-specific insights from the knowledge graph
                     regulations = self.kg.get_regulatory_info(city)
                     cuisine_preferences = self.kg.get_cuisine_preferences(city)
@@ -396,6 +413,7 @@ class EnhancedAgentOrchestrator:
                 query = state["messages"][-1].content
                 
                 if has_kb_access:
+                    kb_queried = True
                     # Extract key terms for better search
                     domain_keywords = parameters.get("domain_keywords", [])
                     city = parameters.get("city", "")
@@ -408,10 +426,12 @@ class EnhancedAgentOrchestrator:
                         search_query += f" in {city}"
                     
                     # Perform knowledge base search
-                    kb_docs = self.kb.hybrid_search(search_query, k=5)
-                    kb_context = [doc.page_content for doc in kb_docs]
+                    docs = self.kb.hybrid_search(search_query, k=5)
+                    kb_docs.extend(docs)
+                    kb_context = [doc.page_content for doc in docs]
                 
                 if has_kg_access and self.kg:
+                    kg_queried = True
                     # Get city information if specified
                     city = parameters.get("city", "")
                     if city:
@@ -456,12 +476,15 @@ class EnhancedAgentOrchestrator:
                 
                 # Basic access with limited knowledge
                 if has_kb_access:
+                    kb_queried = True
                     # Perform knowledge base search
-                    kb_docs = self.kb.hybrid_search(query, k=3)  # Reduced for basic access
-                    kb_context = [doc.page_content for doc in kb_docs]
+                    docs = self.kb.hybrid_search(query, k=3)  # Reduced for basic access
+                    kb_docs.extend(docs)
+                    kb_context = [doc.page_content for doc in docs]
                 
                 # Limited knowledge graph access
                 if has_kg_access and city and self.kg:
+                    kg_queried = True
                     # Get some basic city information
                     regulations = self.kg.get_regulatory_info(city)
                     locations = self.kg.recommend_locations(city)[:3]  # Limited locations
@@ -478,6 +501,8 @@ class EnhancedAgentOrchestrator:
             # Store retrieved context, ensuring not to exceed token limits
             state["context"]["kb_context"] = "\n\n".join(kb_context[:5])  # Limit context
             state["context"]["kg_insights"] = "\n\n".join(kg_insights[:8])  # Limit insights
+            state["context"]["kb_queried"] = kb_queried  # Track if KB was queried
+            state["context"]["kg_queried"] = kg_queried  # Track if KG was queried
             
             # Store sources from documents
             sources = []
@@ -999,6 +1024,9 @@ For more detailed information, please contact your administrator to upgrade your
             
             # Build source/provenance banner
             context = result.get("context", {}) if isinstance(result, dict) else {}
+            # Check if KB/KG were queried (not just if they returned results)
+            kb_queried = context.get("kb_queried", False)
+            kg_queried = context.get("kg_queried", False)
             kb_used = bool(context.get("kb_context"))
             kg_used = bool(context.get("kg_insights"))
             routing = context.get("routing", {})
@@ -1011,11 +1039,16 @@ For more detailed information, please contact your administrator to upgrade your
                 category = src.get("category", "general")
                 source_lines.append(f"  • {file_name} (page {page}, {category})")
             source_list = "\n".join(source_lines) if source_lines else "  • None captured"
+            
+            # Show ✅ if queried (even if no results), ⚠️ if queried but no results, ❌ if not queried
+            kb_status = "✅" if (kb_queried and kb_used) else ("⚠️ (no results)" if kb_queried else "❌")
+            kg_status = "✅" if (kg_queried and kg_used) else ("⚠️ (no results)" if kg_queried else "❌")
+            
             provenance = (
                 "\n\n---\n"
                 "**Source Trace**\n"
-                f"- MongoDB KB: {'✅' if kb_used else '❌'}\n"
-                f"- Neo4j KG: {'✅' if kg_used else '❌'}\n"
+                f"- MongoDB KB: {kb_status}\n"
+                f"- Neo4j KG: {kg_status}\n"
                 f"- Agent: {agent_name}\n"
                 f"- Documents:\n{source_list}"
             )

@@ -28,7 +28,7 @@ st.markdown("""
     .main-header {
         font-size: 2.5rem;
         font-weight: 600;
-        color: #1f1f1f;
+        color: #e8e6e6;
         margin-bottom: 0.5rem;
     }
     .sub-header {
