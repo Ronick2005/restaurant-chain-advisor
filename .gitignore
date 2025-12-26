@@ -1,0 +1,46 @@
+# Bytecode and cache
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.pkl
+
+# Environments
+.env
+.venv/
+venv/
+ENV/
+
+# OS and editor
+.DS_Store
+Thumbs.db
+.vscode/
+
+# Logs and reports
+*.log
+*.coverage
+.coverage.*
+htmlcov/
+
+# Build / dist
+build/
+dist/
+*.egg-info/
+
+# Project data
+restaurant_advisor/data/
+restaurant_advisor/kb/
+restaurant_advisor/kg/__pycache__/
+restaurant_advisor/kb/__pycache__/
+restaurant_advisor/agents/__pycache__/
+restaurant_advisor/utils/__pycache__/
+restaurant_advisor/api_services/__pycache__/
+restaurant_advisor/visualization/__pycache__/
+restaurant_advisor/scripts/__pycache__/
+restaurant_advisor/agents/__pycache__/
+restaurant_advisor/agents/__pycache__/
+
+# Temporary
+*.tmp
+*.temp
+*.bak
