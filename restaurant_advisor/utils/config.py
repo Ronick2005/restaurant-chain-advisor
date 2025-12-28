@@ -46,6 +46,26 @@ ROLES = {
         "memory_access": ["read", "write", "delete"],
         "description": "Full access to all system capabilities"
     },
+    "premium": {
+        "kb_access": ["read"],
+        "kg_access": ["read"],
+        "agent_access": ["market_analysis", "location_recommender", "regulatory_advisor", "domain_specialist"],
+        "domain_access": ["all"],
+        "user_management": False,
+        "data_sources_access": ["mongodb", "neo4j"],
+        "memory_access": ["read", "write"],
+        "description": "Premium access with all agents and domain specialists"
+    },
+    "basic": {
+        "kb_access": ["read"],
+        "kg_access": ["read"],
+        "agent_access": ["location_recommender", "regulatory_advisor"],
+        "domain_access": ["cuisine"],
+        "user_management": False,
+        "data_sources_access": ["mongodb"],
+        "memory_access": ["read"],
+        "description": "Basic access to core location and regulatory features"
+    },
     "analyst": {
         "kb_access": ["read"],
         "kg_access": ["read"],

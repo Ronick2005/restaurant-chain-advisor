@@ -3,11 +3,13 @@ import datetime
 from typing import Dict, List, Optional
 import bcrypt
 from jose import jwt, JWTError
+import os
+from pathlib import Path
 
 from utils.config import JWT_SECRET, ROLES
 
 # User database file location
-USER_DB_FILE = "users.json"
+USER_DB_FILE = os.path.join(os.path.dirname(os.path.dirname(__file__)), "users.json")
 
 def get_users() -> Dict:
     """Load users from JSON file."""

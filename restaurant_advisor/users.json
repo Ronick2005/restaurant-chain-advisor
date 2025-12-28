@@ -16,5 +16,11 @@
     "hashed_password": "$2b$12$.yJMwQhG1s6ptKJ9rihJTeAduFmdZ0HrqrHMUFjcB16vBm2ue7pqG",
     "role": "admin",
     "full_name": "test_admin"
+  },
+  "user2": {
+    "username": "user2",
+    "hashed_password": "$2b$12$i6FBmC1s7Xl9UVAmF9HumuBoKvpCgmVYSsfaObeQ1A2vnx/L5te.O",
+    "role": "premium",
+    "full_name": "User2"
   }
 }

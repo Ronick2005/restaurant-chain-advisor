@@ -111,18 +111,19 @@ def login_page():
     
     with tab2:
         with st.form("register_form"):
-            new_username = st.text_input("Username")
-            new_password = st.text_input("Password", type="password")
-            full_name = st.text_input("Full Name")
-            role = st.selectbox("Role", ["basic", "premium", "admin"])
+            new_username = st.text_input("Username", key="reg_username")
+            new_password = st.text_input("Password", type="password", key="reg_password")
+            full_name = st.text_input("Full Name", key="reg_fullname")
+            role = st.selectbox("Role", ["basic", "premium", "admin"], key="reg_role")
             submit_reg = st.form_submit_button("Register")
             
             if submit_reg:
                 if new_username and new_password and full_name:
-                    if create_user(new_username, new_password, role, full_name):
+                    success = create_user(new_username, new_password, role, full_name)
+                    if success:
                         st.success("Account created successfully! Please login.")
                     else:
-                        st.error("Username already exists")
+                        st.error("Username already exists or invalid role")
                 else:
                     st.warning("Please fill in all fields")
 
