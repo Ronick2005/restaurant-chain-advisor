@@ -583,22 +583,11 @@ class AgentOrchestrator:
                 page = src.get("page", src.get("page_number", "-"))
                 category = src.get("category", "general")
                 source_lines.append(f"  • {file_name} (page {page}, {category})")
-            source_list = "\n".join(source_lines) if source_lines else "  • None captured"
-            provenance = (
-                "\n\n---\n"
-                "**Source Trace**\n"
-                f"- MongoDB KB: {'✅' if kb_used else '❌'}\n"
-                f"- Neo4j KG: {'✅' if kg_used else '❌'}\n"
-                f"- Agent: {agent_name}\n"
-                f"- Documents:\n{source_list}"
-            )
-            
             latest = result["messages"][-1].content if result.get("messages") else ""
             if isinstance(latest, str):
-                latest_with_sources = latest + provenance
+                return latest
             else:
-                latest_with_sources = str(latest) + provenance
-            return latest_with_sources
+                return str(latest)
         except Exception as e:
             print(f"Error in orchestrator.run: {type(e).__name__}: {str(e)}")
             import traceback

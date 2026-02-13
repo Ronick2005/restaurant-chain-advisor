@@ -248,11 +248,9 @@ class Neo4jKnowledgeGraph:
                     l.type as type,
                     l.commercial as commercial,
                     l.foot_traffic as foot_traffic,
-                    l.rent_range as rent_range,
                     l.popular_cuisines as popular_cuisines,
                     l.demographics as demographics,
                     l.public_transport as public_transport,
-                    l.parking as parking,
                     size(nearby_places) as connectivity,
                     [place in nearby_places | {id: place.id, area: place.area, type: place.type}] as nearby_areas
                 ORDER BY l.foot_traffic DESC
@@ -464,11 +462,9 @@ class Neo4jKnowledgeGraph:
                         l.type as type, 
                         l.commercial as commercial,
                         l.foot_traffic as foot_traffic,
-                        l.rent_range as rent_range,
                         l.popular_cuisines as popular_cuisines,
                         l.demographics as demographics,
                         l.public_transport as public_transport,
-                        l.parking as parking,
                         size(nearby_locations) as num_nearby,
                         [loc in nearby_locations | {
                             id: loc.id, 
@@ -494,7 +490,6 @@ class Neo4jKnowledgeGraph:
                         l.area as area,
                         l.type as type,
                         l.foot_traffic as foot_traffic,
-                        l.rent_range as rent_range,
                         connectivity as connectivity,
                         l.popular_cuisines as popular_cuisines
                     ORDER BY l.foot_traffic DESC
@@ -539,7 +534,6 @@ class Neo4jKnowledgeGraph:
                     city.name as city,
                     l.type as type,
                     l.foot_traffic as foot_traffic,
-                    l.rent_range as rent_range,
                     l.popular_cuisines as popular_cuisines,
                     traffic_diff,
                     cuisine_similarity,

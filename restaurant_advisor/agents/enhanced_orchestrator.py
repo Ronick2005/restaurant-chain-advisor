@@ -1040,25 +1040,11 @@ For more detailed information, please contact your administrator to upgrade your
                 source_lines.append(f"  • {file_name} (page {page}, {category})")
             source_list = "\n".join(source_lines) if source_lines else "  • None captured"
             
-            # Show ✅ if queried (even if no results), ⚠️ if queried but no results, ❌ if not queried
-            kb_status = "✅" if (kb_queried and kb_used) else ("⚠️ (no results)" if kb_queried else "❌")
-            kg_status = "✅" if (kg_queried and kg_used) else ("⚠️ (no results)" if kg_queried else "❌")
-            
-            provenance = (
-                "\n\n---\n"
-                "**Source Trace**\n"
-                f"- MongoDB KB: {kb_status}\n"
-                f"- Neo4j KG: {kg_status}\n"
-                f"- Agent: {agent_name}\n"
-                f"- Documents:\n{source_list}"
-            )
-            
             latest = result["messages"][-1].content if result.get("messages") else ""
             if isinstance(latest, str):
-                latest_with_sources = latest + provenance
+                return latest
             else:
-                latest_with_sources = str(latest) + provenance
-            return latest_with_sources
+                return str(latest)
             
         except Exception as e:
             print(f"Error in enhanced orchestrator.run: {type(e).__name__}: {str(e)}")
